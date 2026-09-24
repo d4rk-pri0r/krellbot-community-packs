@@ -1,0 +1,77 @@
+name: lint
+
+on:
+  pull_request:
+    paths:
+      - "packs/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "packs/**"
+      - "scripts/**"
+      - "index.json"
+
+jobs:
+  lint-pr:
+    name: lint changed packs (pull request)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout krellbot-community-packs
+        uses: actions/checkout@v4
+        with:
+          path: packs-repo
+          fetch-depth: 0
+
+      - name: Checkout d4rk-pri0r/krellbot
+        uses: actions/checkout@v4
+        with:
+          repository: d4rk-pri0r/krellbot
+          path: krellbot
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: List changed pack files
+        id: changed
+        working-directory: packs-repo
+        run: |
+          {
+            echo "files<<EOF"
+            git diff --name-only \
+              "origin/${{ github.base_ref }}...HEAD" -- 'packs/*.json' \
+              || true
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed packs
+        working-directory: packs-repo
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          if [ -z "${CHANGED_FILES// /}" ]; then
+            echo "No packs/*.json changed. Skipping lint."
+            exit 0
+          fi
+          echo "Changed pack files:"
+          printf '%s\n' "$CHANGED_FILES"
+          printf '%s\n' "$CHANGED_FILES" | while IFS= read -r pack; do
+            [ -n "$pack" ] || continue
+            uv run --project ../krellbot krellbot lint "$pack"
+          done
+
+  check-index:
+    name: verify index.json (push to main)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout krellbot-community-packs
+        uses: actions/checkout@v4
+        with:
+          path: packs-repo
+          fetch-depth: 0
+
+      - name: Verify index.json
+        working-directory: packs-repo
+        run: python3 scripts/build_index.py --check
