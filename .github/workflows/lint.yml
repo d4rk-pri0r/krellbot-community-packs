@@ -2,76 +2,46 @@ name: lint
 
 on:
   pull_request:
-    paths:
-      - "packs/**"
   push:
-    branches:
-      - main
-    paths:
-      - "packs/**"
-      - "scripts/**"
-      - "index.json"
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  lint-pr:
-    name: lint changed packs (pull request)
-    if: github.event_name == 'pull_request'
+  validate-catalogue:
+    name: validate community pack catalogue
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout krellbot-community-packs
-        uses: actions/checkout@v4
+      - name: Check out proposed catalogue
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: packs-repo
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Checkout d4rk-pri0r/krellbot
-        uses: actions/checkout@v4
+      - name: Check out pinned Krellbot validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: d4rk-pri0r/krellbot
+          repository: d4rkpr10r-Labs/krellbot
+          ref: 1b454e4cc19dd1f7eb51e00ac09f6e67ce9fc07c
           path: krellbot
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
-      - name: List changed pack files
-        id: changed
+      - name: Validate index and every pack
         working-directory: packs-repo
         run: |
-          {
-            echo "files<<EOF"
-            git diff --name-only \
-              "origin/${{ github.base_ref }}...HEAD" -- 'packs/*.json' \
-              || true
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Lint changed packs
-        working-directory: packs-repo
-        env:
-          CHANGED_FILES: ${{ steps.changed.outputs.files }}
-        run: |
-          if [ -z "${CHANGED_FILES// /}" ]; then
-            echo "No packs/*.json changed. Skipping lint."
-            exit 0
+          published=()
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            published=(--published-ref "$GITHUB_SHA")
           fi
-          echo "Changed pack files:"
-          printf '%s\n' "$CHANGED_FILES"
-          printf '%s\n' "$CHANGED_FILES" | while IFS= read -r pack; do
-            [ -n "$pack" ] || continue
-            uv run --project ../krellbot krellbot lint "$pack"
-          done
+          uv run --project ../krellbot --frozen --no-dev --python 3.13 \
+            python scripts/build_index.py --validate "${published[@]}"
 
-  check-index:
-    name: verify index.json (push to main)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout krellbot-community-packs
-        uses: actions/checkout@v4
-        with:
-          path: packs-repo
-          fetch-depth: 0
-
-      - name: Verify index.json
+      - name: Test catalogue rejection cases
         working-directory: packs-repo
-        run: python3 scripts/build_index.py --check
+        run: |
+          uv run --project ../krellbot --frozen --no-dev --python 3.13 \
+            python -m unittest discover -s tests -v

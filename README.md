@@ -9,7 +9,7 @@ lose money. Nothing in this repository is financial advice.
 ## What this is
 
 A community-contributed index of strategy packs for
-[krellbot](https://github.com/d4rk-pri0r/krellbot). Each pack is a JSON file
+[krellbot](https://github.com/d4rkpr10r-Labs/krellbot). Each pack is a JSON file
 that describes a trading strategy: indicators, entry/exit rules, risk limits,
 and markets.
 
@@ -19,12 +19,19 @@ and markets.
 - `index.json` is the generated catalog. Do not edit it by hand. Regenerate
   it with `python3 scripts/build_index.py`.
 
-Each pack is validated by `krellbot lint` on every pull request.
+CI verifies the generated index and validates every pack with Krellbot's
+Pack DSL validator on pull requests and pushes to `main`. Pull requests
+check the proposed files in the checkout. Pushes to `main` also check that
+GitHub serves the same pack bytes at the pushed commit.
 
 ## Contributing
 
-Open a pull request that adds a JSON file under `packs/`. The CI will run
-`krellbot lint` against your changes.
+Add a JSON file under `packs/`, regenerate `index.json`, and open a pull
+request. With Krellbot installed, run `python3 scripts/build_index.py --validate`
+to check the full catalogue locally.
+
+See the [community pack authoring checklist](https://github.com/d4rkpr10r-Labs/krellbot/blob/main/docs/community.md)
+for the required fields, filename rules, and install size limit.
 
 ## License
 
